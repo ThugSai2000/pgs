@@ -18,92 +18,147 @@ import {
   CarouselPrevious,
 } from "@/components/ui/carousel"
 import { useState, useEffect } from "react"
-import { ImagePlus, Wifi, Wind, Dumbbell, BookOpen, Loader2, X } from "lucide-react"
+import {
+  ImagePlus,
+  Wifi,
+  Wind,
+  Dumbbell,
+  BookOpen,
+  Loader2,
+  X,
+  Utensils,
+  Shield,
+  Car,
+} from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { hostelApi } from "@/api/hostelApi"
 import { useNavigate } from "react-router-dom"
+import * as z from "zod"
+
+// Define the validation schema using zod
+const hostelSchema = z.object({
+  name: z.string().min(1, { message: "Hostel name is required" }),
+  type: z.enum(["boys", "girls", "mixed"], { message: "Hostel type is required" }),
+  address: z.string().min(1, { message: "Address is required" }),
+  email: z.string().email({ message: "Invalid email address" }).min(1, { message: "Email is required" }),
+  contactNumber: z
+    .string()
+    .min(1, { message: "Contact number is required" })
+    .regex(/^\+?\d{10,15}$/, { message: "Invalid phone number format" }),
+  facilities: z
+    .array(z.enum(["WiFi", "AC", "Laundry", "Gym", "Library", "Cafeteria", "Security", "Parking"]))
+    .min(1, { message: "At least one facility is required" }),
+  images: z
+    .array(z.instanceof(File))
+    .min(1, { message: "At least one image is required" })
+    .max(5, { message: "Maximum 5 images allowed" }),
+})
 
 export default function AddHostel() {
   const [images, setImages] = useState([])
   const [imageUrls, setImageUrls] = useState([])
   const [isLoading, setIsLoading] = useState(false)
+  const [errors, setErrors] = useState({})
+  const [selectedFacilities, setSelectedFacilities] = useState([])
+
+  const { user } = useAuth()
+  const navigate = useNavigate()
 
   useEffect(() => {
     return () => {
-      imageUrls.forEach(url => URL.revokeObjectURL(url))
+      imageUrls.forEach((url) => URL.revokeObjectURL(url))
     }
-  }, [])
+  }, [imageUrls])
 
   const handleImageUpload = (e) => {
     const files = Array.from(e.target.files)
     if (files.length + images.length > 5) {
-      alert('Maximum 5 images allowed')
+      alert("Maximum 5 images allowed")
       return
     }
-    const newUrls = files.map(file => URL.createObjectURL(file))
-    setImageUrls(prev => [...prev, ...newUrls])
-    setImages(prev => [...prev, ...files])
+    const newUrls = files.map((file) => URL.createObjectURL(file))
+    setImageUrls((prev) => [...prev, ...newUrls])
+    setImages((prev) => [...prev, ...files])
+    setErrors((prev) => ({ ...prev, images: null }))
   }
 
   const removeImage = (index) => {
     URL.revokeObjectURL(imageUrls[index])
-    setImageUrls(prev => prev.filter((_, i) => i !== index))
-    setImages(prev => prev.filter((_, i) => i !== index))
+    setImageUrls((prev) => prev.filter((_, i) => i !== index))
+    setImages((prev) => prev.filter((_, i) => i !== index))
   }
 
-  const { user } = useAuth()
-  const navigate = useNavigate()
-  const [formData, setFormData] = useState({
-    name: "",
-    type: "",
-    address: "",
-    email: "",
-    contactNumber: "",
-    facilities: []
-  })
+  const toggleFacility = (facility) => {
+    setSelectedFacilities((prev) =>
+      prev.includes(facility) ? prev.filter((f) => f !== facility) : [...prev, facility]
+    )
+    setErrors((prev) => ({ ...prev, facilities: null }))
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setIsLoading(true)
+    setErrors({})
+
     try {
+      // Collect form data
+      const form = e.target
+      const formData = new FormData(form)
+      const data = {
+        name: formData.get("name"),
+        type: formData.get("type"),
+        address: formData.get("address"),
+        email: formData.get("email"),
+        contactNumber: formData.get("contactNumber"),
+        facilities: selectedFacilities,
+        images: images,
+      }
+
+      // Validate form data using zod
+      const validatedData = hostelSchema.parse(data)
+
       const hostelData = {
         ownerId: user.id,
-        ...formData,
-        images: images
+        ...validatedData,
       }
-      const result = await hostelApi.createHostel(hostelData)
-      navigate('/hostel-dashboard')
+
+      // Prepare FormData for API call
+      const apiFormData = new FormData()
+      Object.entries(hostelData).forEach(([key, value]) => {
+        if (key === "images") {
+          value.forEach((file) => apiFormData.append("images", file))
+        } else if (key === "facilities") {
+          apiFormData.append("facilities", JSON.stringify(value))
+        } else {
+          apiFormData.append(key, value)
+        }
+      })
+
+      const result = await hostelApi.createHostel(apiFormData)
+      navigate("/hostel-dashboard")
     } catch (error) {
-      console.error('Error creating hostel:', error)
-      // Add error handling UI here
+      if (error instanceof z.ZodError) {
+        const formattedErrors = {}
+        error.errors.forEach((err) => {
+          formattedErrors[err.path[0]] = err.message
+        })
+        setErrors(formattedErrors)
+      } else {
+        console.error("Error creating hostel:", error)
+        // Add error handling UI here (e.g., toast notification)
+      }
     } finally {
       setIsLoading(false)
     }
   }
 
-  const handleInputChange = (field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }))
-  }
-
-  const toggleFacility = (facility) => {
-    setFormData(prev => ({
-      ...prev,
-      facilities: prev.facilities.includes(facility)
-        ? prev.facilities.filter(f => f !== facility)
-        : [...prev.facilities, facility]
-    }))
-  }
-
   return (
     <div className="min-h-screen bg-background">
-      {/* Header - Fixed on mobile, static on desktop */}
+      {/* Header */}
       <div className="md:static sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex h-14 items-center px-4 max-w-6xl mx-auto">
-          <button 
-            onClick={() => window.history.back()} 
+          <button
+            onClick={() => window.history.back()}
             className="mr-3 h-8 w-8 flex items-center justify-center rounded-full hover:bg-accent"
           >
             ←
@@ -146,7 +201,7 @@ export default function AddHostel() {
                   </Carousel>
                 </div>
               ) : null}
-              
+
               {images.length < 5 && (
                 <Label
                   htmlFor="images"
@@ -154,6 +209,7 @@ export default function AddHostel() {
                 >
                   <input
                     type="file"
+                    name="images"
                     accept="image/*"
                     multiple
                     capture="environment"
@@ -165,48 +221,55 @@ export default function AddHostel() {
                   <span className="text-sm font-medium">Add Hostel Images</span>
                   <span className="text-xs text-gray-500 text-center">
                     {images.length === 0
-                      ? 'Tap to upload (Max 5 images)'
-                      : `${images.length} image${images.length > 1 ? 's' : ''} selected (${5 - images.length} remaining)`}
+                      ? "Tap to upload (Max 5 images)"
+                      : `${images.length} image${images.length > 1 ? "s" : ""} selected (${
+                          5 - images.length
+                        } remaining)`}
                   </span>
                 </Label>
               )}
+              {errors.images && <p className="text-sm text-red-600 mt-2">{errors.images}</p>}
             </Card>
 
-            {/* Amenities Section - Moved to left column on desktop */}
+            {/* Facilities Section */}
             <div className="py-4">
               <Label className="mb-4 block">Facilities & Amenities</Label>
-              <div className="grid grid-cols-5 gap-3 text-center">
-                <div className="flex flex-col items-center gap-2">
-                  <div className="p-3 rounded-full bg-gray-100">
-                    <Wifi className="w-5 h-5" />
-                  </div>
-                  <span className="text-sm">WiFi</span>
-                </div>
-                <div className="flex flex-col items-center gap-2">
-                  <div className="p-3 rounded-full bg-gray-100">
-                    <Wind className="w-5 h-5" />
-                  </div>
-                  <span className="text-sm">AC</span>
-                </div>
-                <div className="flex flex-col items-center gap-2">
-                  <div className="p-3 rounded-full bg-gray-100">
-                    <Loader2 className="w-5 h-5" />
-                  </div>
-                  <span className="text-sm">Laundry</span>
-                </div>
-                <div className="flex flex-col items-center gap-2">
-                  <div className="p-3 rounded-full bg-gray-100">
-                    <Dumbbell className="w-5 h-5" />
-                  </div>
-                  <span className="text-sm">Gym</span>
-                </div>
-                <div className="flex flex-col items-center gap-2">
-                  <div className="p-3 rounded-full bg-gray-100">
-                    <BookOpen className="w-5 h-5" />
-                  </div>
-                  <span className="text-sm">Library</span>
-                </div>
+              <div className="grid grid-cols-4 gap-3 text-center">
+                {[
+                  "WiFi",
+                  "AC",
+                  "Laundry",
+                  "Gym",
+                  "Library",
+                  "Cafeteria",
+                  "Security",
+                  "Parking",
+                ].map((facility) => (
+                  <button
+                    key={facility}
+                    type="button"
+                    onClick={() => toggleFacility(facility)}
+                    className={`flex flex-col items-center gap-2 p-2 rounded-lg ${
+                      selectedFacilities.includes(facility) ? "bg-blue-100" : "bg-gray-100"
+                    }`}
+                  >
+                    <div className="p-3 rounded-full">
+                      {facility === "WiFi" && <Wifi className="w-5 h-5" />}
+                      {facility === "AC" && <Wind className="w-5 h-5" />}
+                      {facility === "Laundry" && <Loader2 className="w-5 h-5" />}
+                      {facility === "Gym" && <Dumbbell className="w-5 h-5" />}
+                      {facility === "Library" && <BookOpen className="w-5 h-5" />}
+                      {facility === "Cafeteria" && <Utensils className="w-5 h-5" />}
+                      {facility === "Security" && <Shield className="w-5 h-5" />}
+                      {facility === "Parking" && <Car className="w-5 h-5" />}
+                    </div>
+                    <span className="text-sm">{facility}</span>
+                  </button>
+                ))}
               </div>
+              {errors.facilities && (
+                <p className="text-sm text-red-600 mt-2">{errors.facilities}</p>
+              )}
             </div>
           </div>
 
@@ -215,28 +278,26 @@ export default function AddHostel() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="ownerName">Owner Name</Label>
-                <Input 
-                  id="ownerName" 
-                  placeholder="Enter owner's name"
-                  className="h-11"
-                />
+                <Input id="ownerName" name="ownerName" placeholder="Enter owner's name" className="h-11" />
+                {errors.ownerName && (
+                  <p className="text-sm text-red-600">{errors.ownerName}</p>
+                )}
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="name">Hostel Name</Label>
-                <Input 
-                  id="name" 
-                  value={formData.name}
-                  onChange={(e) => handleInputChange('name', e.target.value)}
+                <Input
+                  id="name"
+                  name="name"
                   placeholder="Enter hostel name"
                   className="h-11"
-                  required
                 />
+                {errors.name && <p className="text-sm text-red-600">{errors.name}</p>}
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="type">Type of Hostel</Label>
-                <Select value={formData.type} onValueChange={(value) => handleInputChange('type', value)}>
+                <Select name="type" onValueChange={(value) => (form.type.value = value)}>
                   <SelectTrigger className="h-11">
                     <SelectValue placeholder="Select hostel type" />
                   </SelectTrigger>
@@ -246,60 +307,56 @@ export default function AddHostel() {
                     <SelectItem value="mixed">Mixed Hostel</SelectItem>
                   </SelectContent>
                 </Select>
+                {errors.type && <p className="text-sm text-red-600">{errors.type}</p>}
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="address">Location Address</Label>
                 <Textarea
                   id="address"
-                  value={formData.address}
-                  onChange={(e) => handleInputChange('address', e.target.value)}
+                  name="address"
                   placeholder="Enter complete address"
                   className="min-h-[100px]"
-                  required
                 />
+                {errors.address && <p className="text-sm text-red-600">{errors.address}</p>}
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="contactNumber">Contact Number</Label>
                 <Input
                   id="contactNumber"
-                  value={formData.contactNumber}
-                  onChange={(e) => handleInputChange('contactNumber', e.target.value)}
+                  name="contactNumber"
                   placeholder="+1 (XXX) XXX-XXXX"
                   type="tel"
                   className="h-11"
-                  required
                 />
+                {errors.contactNumber && (
+                  <p className="text-sm text-red-600">{errors.contactNumber}</p>
+                )}
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="email">Email Address</Label>
                 <Input
                   id="email"
+                  name="email"
                   type="email"
-                  value={formData.email}
-                  onChange={(e) => handleInputChange('email', e.target.value)}
                   placeholder="Enter email address"
                   className="h-11"
-                  required
                 />
+                {errors.email && <p className="text-sm text-red-600">{errors.email}</p>}
               </div>
             </div>
 
-            {/* Submit Button - Now part of the form, not fixed */}
-            <Button 
-              type="submit" 
-              className="w-full h-11" 
-              disabled={isLoading}
-            >
+            {/* Submit Button */}
+            <Button type="submit" className="w-full h-11" disabled={isLoading}>
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Creating...
                 </>
               ) : (
-                'Create Hostel'
+                "Create Hostel"
               )}
             </Button>
           </div>

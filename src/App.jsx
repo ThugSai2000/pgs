@@ -17,7 +17,7 @@ const Login = lazy(() => import('./pages/Login'))
 function App() {
   // Set default timeout
   axios.defaults.timeout = 30000
-  axios.defaults.baseURL = 'http://localhost:5000/api'
+  axios.defaults.baseURL = 'http://192.168.29.30:5000/api'
 
   // Add axios interceptor for auth token
   axios.interceptors.request.use((config) => {

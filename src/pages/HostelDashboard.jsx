@@ -96,10 +96,12 @@ export default function HostelDashboard() {
               <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                 <Button 
                   variant="outline" 
-                  className="h-auto py-4 px-2 flex flex-col items-center gap-2"
+                  className="h-auto py-4 px-2 flex flex-col items-center gap-2 "
                   onClick={() => navigate('/add-hostel')}
                 >
-                  <Plus className="h-5 w-5" />
+                <div className="p-4 bg-blue-100 rounded-full ">
+                <Plus className="h-5 w-5 text-blue-500" />
+                </div>
                   <span>Add Hostel</span>
                 </Button>
                 
@@ -107,22 +109,22 @@ export default function HostelDashboard() {
                   variant="outline" 
                   className="h-auto py-4 px-2 flex flex-col items-center gap-2"
                   onClick={() => navigate('/room-management')}
-                >
-                  <Home className="h-5 w-5" />
+                ><div className="p-4 bg-blue-100 rounded-full text-blue-500">
+                  <Home className="h-5 w-5  "/></div>
                   <span>Manage Rooms</span>
                 </Button>
                 <Button 
                   variant="outline" 
                   className="h-auto py-4 px-2 flex flex-col items-center gap-2"
-                >
-                  <Wallet2 className="h-5 w-5" />
+                ><div className="p-4 bg-orange-100 rounded-full text-orange-500">
+                  <Wallet2 className="h-5 w-5" /></div>
                   <span>Payments</span>
                 </Button>
                 <Button 
                   variant="outline" 
                   className="h-auto py-4 px-2 flex flex-col items-center gap-2"
-                >
-                  <Users2 className="h-5 w-5" />
+                ><div className="p-4 bg-green-100 rounded-full text-green-500">
+                  <Users2 className="h-5 w-5" /></div>
                   <span>Student Records</span>
                 </Button>
               </div>
